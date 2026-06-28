@@ -95,17 +95,19 @@ done
 log "Postgres is ready."
 
 # ── Stanza create (idempotent) ───────────────────────────────────────────────
+# Run pgbackrest as root — OwnBase drops all capabilities (DropCapability=ALL)
+# so su/runuser cannot switch users. pgbackrest works fine as root; the repo
+# directory is pre-owned accordingly.
 log "Creating stanza '${STANZA}'..."
-su -s /bin/bash pgbackrest -c "pgbackrest --stanza=${STANZA} stanza-create" 2>&1 | \
+pgbackrest --stanza="${STANZA}" stanza-create 2>&1 | \
     sed 's/^/[pgbackrest] /' || log "Stanza-create returned non-zero (may already exist; continuing)."
 
 # ── Initial full backup if none exists ──────────────────────────────────────
-SNAPSHOT_COUNT=$(su -s /bin/bash pgbackrest -c \
-    "pgbackrest --stanza=${STANZA} info --output=text" 2>/dev/null | \
+SNAPSHOT_COUNT=$(pgbackrest --stanza="${STANZA}" info --output=text 2>/dev/null | \
     grep -c "full backup" || true)
 if [ "$SNAPSHOT_COUNT" -eq 0 ]; then
     log "No backups found — running initial full backup..."
-    su -s /bin/bash pgbackrest -c "pgbackrest --stanza=${STANZA} backup --type=full" 2>&1 | \
+    pgbackrest --stanza="${STANZA}" backup --type=full 2>&1 | \
         sed 's/^/[pgbackrest] /'
     log "Initial backup complete."
 fi
@@ -120,7 +122,7 @@ backup_loop() {
     sleep "$interval"
     while true; do
         log "Running scheduled ${type} backup..."
-        su -s /bin/bash pgbackrest -c "pgbackrest --stanza=${STANZA} backup --type=${type}" 2>&1 | \
+        pgbackrest --stanza="${STANZA}" backup --type="${type}" 2>&1 | \
             sed 's/^/[pgbackrest] /' || log "${type} backup failed (will retry next cycle)."
         sleep "$interval"
     done
