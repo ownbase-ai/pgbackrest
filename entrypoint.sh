@@ -28,9 +28,11 @@ if [ -z "${_CLIENT_PUBKEY:-}" ]; then
     log "WARNING: PGBACKREST_CLIENT_PUBKEY is not set — the postgres container cannot connect via SSH."
     log "         Set it with: ownbasectl secrets set pgbackrest PGBACKREST_CLIENT_PUBKEY=..."
 else
-    # .ssh/ and authorized_keys are root-owned (Dockerfile), so root in the
-    # container can write here even with CAP_DAC_OVERRIDE dropped.
+    mkdir -p /home/pgbackrest/.ssh
     printf '%s\n' "$_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
+    chown -R pgbackrest:pgbackrest /home/pgbackrest/.ssh
+    chmod 700 /home/pgbackrest/.ssh
+    chmod 600 /home/pgbackrest/.ssh/authorized_keys
     log "SSH authorized key installed."
 fi
 
