@@ -33,10 +33,12 @@ if [ -z "${_CLIENT_PUBKEY:-}" ]; then
 else
     mkdir -p /home/pgbackrest/.ssh
     printf '%s\n' "$_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
-    # The container runs with DropCapability=ALL (no CAP_CHOWN), so we cannot
-    # chown the file to pgbackrest. OpenSSH accepts authorized_keys owned by
-    # root as long as it is not group/world writable; chmod 600 satisfies that.
-    chmod 600 /home/pgbackrest/.ssh/authorized_keys
+    # DropCapability=ALL means no CAP_CHOWN, so the file remains root-owned.
+    # sshd's StrictModes only rejects group/world WRITABLE files (mode & 022),
+    # so 644 (world-readable, not writable) satisfies both:
+    #   - sshd's StrictModes check (not group/world writable)
+    #   - sshd's ability to open the file as UID=pgbackrest (world-readable)
+    chmod 644 /home/pgbackrest/.ssh/authorized_keys
     log "SSH authorized key installed."
 fi
 
