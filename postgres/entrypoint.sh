@@ -48,9 +48,13 @@ EOF
 fi
 
 # ── Rewrite pgbackrest.conf from env (stanza and host are configurable) ──────
+# This container is the pg HOST — it is the backup CLIENT. The pgbackrest
+# container is the REPO HOST (server). All backup operations are initiated here.
+mkdir -p /etc/pgbackrest
 cat > /etc/pgbackrest/pgbackrest.conf << EOF
 [global]
 repo1-host=${_REPO_HOST}
+repo1-host-port=2222
 repo1-host-user=pgbackrest
 log-level-console=info
 log-path=/var/log/pgbackrest
@@ -60,19 +64,46 @@ pg1-path=/var/lib/postgresql/data
 pg1-port=5432
 EOF
 
-# ── Archive init script (runs on first initdb, sets archive settings) ────────
+# ── Initdb script: runs once on first postgres start ─────────────────────────
 # docker-entrypoint-initdb.d scripts run after initdb completes but before
 # postgres accepts external connections, so postgresql.auto.conf is writable.
 mkdir -p /docker-entrypoint-initdb.d
+
 cat > /docker-entrypoint-initdb.d/10-pgbackrest-archive.sh << INITSCRIPT
 #!/bin/bash
-# Applied once on first initdb. Subsequent starts read from postgresql.auto.conf.
+set -euo pipefail
+
+log() { echo "[pgbackrest-init] \$*"; }
+
+log "Waiting for pgbackrest repo host (${_REPO_HOST}:2222) to accept SSH..."
+ATTEMPTS=0
+until ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p 2222 \
+    -i /var/lib/postgresql/.ssh/id_ed25519 \
+    pgbackrest@${_REPO_HOST} "pgbackrest version" >/dev/null 2>&1; do
+    ATTEMPTS=\$((ATTEMPTS + 1))
+    if [ "\$ATTEMPTS" -ge 24 ]; then
+        log "ERROR: pgbackrest repo host not ready after 2 minutes. Skipping stanza init."
+        exit 0
+    fi
+    sleep 5
+done
+log "pgbackrest repo host is reachable."
+
+log "Creating stanza '${STANZA}'..."
+pgbackrest --stanza="${STANZA}" stanza-create 2>&1 | sed 's/^/[pgbackrest] /' || \
+    log "stanza-create returned non-zero (may already exist; continuing)."
+
+log "Enabling WAL archiving..."
 cat >> "\$PGDATA/postgresql.auto.conf" << 'PGCONF'
 archive_mode = on
 archive_command = 'pgbackrest --stanza=${STANZA} archive-push %p'
 archive_timeout = 60
 PGCONF
-echo "[pgbackrest] Archive settings written to postgresql.auto.conf"
+log "Archive settings written to postgresql.auto.conf"
+
+log "Running initial full backup..."
+pgbackrest --stanza="${STANZA}" backup --type=full 2>&1 | sed 's/^/[pgbackrest] /' || \
+    log "Initial backup failed (will retry on next scheduled run)."
 INITSCRIPT
 chmod +x /docker-entrypoint-initdb.d/10-pgbackrest-archive.sh
 

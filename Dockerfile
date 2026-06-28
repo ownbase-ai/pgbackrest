@@ -1,11 +1,11 @@
-FROM ubuntu:24.04
+# Use the same base as the postgres client container so that the pgbackrest
+# binary versions match (both pull from apt.postgresql.org).
+FROM docker.io/library/postgres:17
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         pgbackrest \
         openssh-server \
-        postgresql-client \
-        cron \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -34,7 +34,7 @@ RUN chmod +x /entrypoint.sh
 
 VOLUME ["/var/lib/pgbackrest", "/var/log/pgbackrest"]
 
-# sshd for pgbackrest repo-host communication
-EXPOSE 22
+# sshd for pgbackrest repo-host communication (port 2222 — no CAP_NET_BIND_SERVICE needed)
+EXPOSE 2222
 
 ENTRYPOINT ["/entrypoint.sh"]
