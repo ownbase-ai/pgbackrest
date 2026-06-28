@@ -25,7 +25,9 @@ Host ${PGBACKREST_HOST}
     User pgbackrest
 EOF
     chmod 600 "$SSH_DIR/config"
-    chown -R postgres:postgres "$SSH_DIR"
+    # CAP_CHOWN is dropped by OwnBase; pre-create $SSH_DIR as postgres in the
+    # Dockerfile so this chown is a no-op in practice.
+    chown -R postgres:postgres "$SSH_DIR" 2>/dev/null || true
     log "SSH key for pgbackrest configured."
 fi
 

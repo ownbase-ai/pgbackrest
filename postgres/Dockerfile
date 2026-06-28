@@ -6,8 +6,9 @@ RUN apt-get update && \
         openssh-client && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /etc/pgbackrest /var/log/pgbackrest && \
-    chown postgres:postgres /var/log/pgbackrest
+RUN mkdir -p /etc/pgbackrest /var/log/pgbackrest /var/lib/postgresql/.ssh && \
+    chown postgres:postgres /var/log/pgbackrest /var/lib/postgresql/.ssh && \
+    chmod 700 /var/lib/postgresql/.ssh
 
 COPY pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
 COPY entrypoint.sh /pgbackrest-entrypoint.sh
