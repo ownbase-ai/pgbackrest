@@ -3,17 +3,22 @@ set -euo pipefail
 
 log() { echo "[postgres-pgbackrest] $*"; }
 
+# ── Capture and scrub env vars that conflict with pgbackrest's env convention ─
+# pgbackrest interprets every PGBACKREST_* env var as a config option. Capture
+# our custom values into local vars, then unset before any pgbackrest call.
 STANZA="${PGBACKREST_STANZA:-main}"
-PGBACKREST_HOST="${PGBACKREST_HOST:-pgbackrest}"
+_REPO_HOST="${PGBACKREST_HOST:-pgbackrest}"
+_SSH_KEY_B64="${PGBACKREST_SSH_KEY_B64:-}"
+_SSH_KEY="${PGBACKREST_SSH_KEY:-}"
+unset PGBACKREST_HOST PGBACKREST_SSH_KEY_B64 PGBACKREST_SSH_KEY
 
 # ── SSH private key (injected by OwnBase secrets as env var) ─────────────────
-# Accept the key either as plain text (PGBACKREST_SSH_KEY) or base64-encoded
-# (PGBACKREST_SSH_KEY_B64). Base64 is preferred because YAML env values cannot
-# contain literal newlines, and ownbase.yaml env: items are single-line strings.
-if [ -n "${PGBACKREST_SSH_KEY_B64:-}" ]; then
-    _RAW_KEY=$(printf '%s' "$PGBACKREST_SSH_KEY_B64" | base64 -d)
-elif [ -n "${PGBACKREST_SSH_KEY:-}" ]; then
-    _RAW_KEY="$PGBACKREST_SSH_KEY"
+# Accept the key either as plain text (_SSH_KEY) or base64-encoded (_SSH_KEY_B64).
+# Base64 is preferred because YAML env values cannot contain literal newlines.
+if [ -n "${_SSH_KEY_B64:-}" ]; then
+    _RAW_KEY=$(printf '%s' "$_SSH_KEY_B64" | base64 -d)
+elif [ -n "${_SSH_KEY:-}" ]; then
+    _RAW_KEY="$_SSH_KEY"
 else
     _RAW_KEY=""
 fi
@@ -29,7 +34,7 @@ else
     # Disable strict host checking for the pgbackrest container; communication
     # is internal to the Podman network and the channel is authenticated by key.
     cat > "$SSH_DIR/config" << EOF
-Host ${PGBACKREST_HOST}
+Host ${_REPO_HOST}
     StrictHostKeyChecking no
     Port 2222
     IdentityFile ~/.ssh/id_ed25519
@@ -45,7 +50,7 @@ fi
 # ── Rewrite pgbackrest.conf from env (stanza and host are configurable) ──────
 cat > /etc/pgbackrest/pgbackrest.conf << EOF
 [global]
-repo1-host=${PGBACKREST_HOST}
+repo1-host=${_REPO_HOST}
 repo1-host-user=pgbackrest
 log-level-console=info
 log-path=/var/log/pgbackrest

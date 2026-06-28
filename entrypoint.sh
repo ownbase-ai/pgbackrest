@@ -3,6 +3,15 @@ set -euo pipefail
 
 log() { echo "[pgbackrest] $*"; }
 
+# ── Capture and scrub env vars that conflict with pgbackrest's env convention ─
+# pgbackrest interprets every PGBACKREST_* env var as a config option
+# (e.g. PGBACKREST_PG_HOST → pg-host, which is invalid because it needs an
+# index like pg1-host). Capture our custom values into local vars, then unset
+# to prevent pgbackrest from seeing them as config options.
+_CLIENT_PUBKEY="${PGBACKREST_CLIENT_PUBKEY:-}"
+_PG_HOST="${PGBACKREST_PG_HOST:-postgres}"
+unset PGBACKREST_CLIENT_PUBKEY PGBACKREST_PG_HOST
+
 # ── SSH host keys ────────────────────────────────────────────────────────────
 ssh-keygen -A -q
 
@@ -16,19 +25,19 @@ PubkeyAuthentication yes
 EOF
 
 # ── Authorized key (injected by OwnBase secrets as env var) ─────────────────
-if [ -z "${PGBACKREST_CLIENT_PUBKEY:-}" ]; then
+if [ -z "${_CLIENT_PUBKEY:-}" ]; then
     log "WARNING: PGBACKREST_CLIENT_PUBKEY is not set — the postgres container cannot connect via SSH."
     log "         Set it with: ownbasectl secrets set pgbackrest PGBACKREST_CLIENT_PUBKEY=..."
 else
     # .ssh/ and authorized_keys are root-owned (Dockerfile), so root in the
     # container can write here even with CAP_DAC_OVERRIDE dropped.
-    printf '%s\n' "$PGBACKREST_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
+    printf '%s\n' "$_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
     log "SSH authorized key installed."
 fi
 
 # ── pgbackrest.conf (generated from env) ────────────────────────────────────
 STANZA="${PGBACKREST_STANZA:-main}"
-PG_HOST="${PGBACKREST_PG_HOST:-postgres}"
+PG_HOST="${_PG_HOST}"
 PG_PORT="${PGBACKREST_PG_PORT:-5432}"
 PG_PATH="${PGBACKREST_PG_PATH:-/var/lib/postgresql/data}"
 PG_USER="${PGBACKREST_PG_USER:-postgres}"
