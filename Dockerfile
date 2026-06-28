@@ -10,6 +10,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash pgbackrest && \
+    # useradd creates the home dir as 750; root loses access with DropCapability=ALL.
+    # Set 755 so the entrypoint (root, no CAP_DAC_OVERRIDE) can traverse into it.
+    chmod 755 /home/pgbackrest && \
     mkdir -p \
         /var/lib/pgbackrest \
         /var/log/pgbackrest \
