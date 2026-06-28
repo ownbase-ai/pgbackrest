@@ -6,7 +6,9 @@ log() { echo "[pgbackrest] $*"; }
 # ── SSH host keys ────────────────────────────────────────────────────────────
 ssh-keygen -A -q
 
+# Use port 2222: port 22 requires CAP_NET_BIND_SERVICE which OwnBase drops.
 cat > /etc/ssh/sshd_config.d/pgbackrest.conf << 'EOF'
+Port 2222
 PermitRootLogin no
 AllowUsers pgbackrest
 PasswordAuthentication no
@@ -20,7 +22,9 @@ if [ -z "${PGBACKREST_CLIENT_PUBKEY:-}" ]; then
 else
     printf '%s\n' "$PGBACKREST_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
     chmod 600 /home/pgbackrest/.ssh/authorized_keys
-    chown pgbackrest:pgbackrest /home/pgbackrest/.ssh/authorized_keys
+    # CAP_CHOWN is dropped by OwnBase; file is already owned by pgbackrest from
+    # the Dockerfile RUN step so we only need the content right.
+    chown pgbackrest:pgbackrest /home/pgbackrest/.ssh/authorized_keys 2>/dev/null || true
     log "SSH authorized key installed."
 fi
 
@@ -72,10 +76,10 @@ pg1-port=${PG_PORT}
 EOF
 fi
 
-chown pgbackrest:pgbackrest /etc/pgbackrest/pgbackrest.conf
+# CAP_CHOWN dropped; config is root-owned but pgbackrest reads it fine.
 
-# ── Start sshd ───────────────────────────────────────────────────────────────
-log "Starting sshd..."
+# ── Start sshd on port 2222 ──────────────────────────────────────────────────
+log "Starting sshd on port 2222..."
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 

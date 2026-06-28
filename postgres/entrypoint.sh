@@ -20,6 +20,7 @@ else
     cat > "$SSH_DIR/config" << EOF
 Host ${PGBACKREST_HOST}
     StrictHostKeyChecking no
+    Port 2222
     IdentityFile ~/.ssh/id_ed25519
     User pgbackrest
 EOF
