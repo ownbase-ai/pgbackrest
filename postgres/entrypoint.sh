@@ -7,13 +7,24 @@ STANZA="${PGBACKREST_STANZA:-main}"
 PGBACKREST_HOST="${PGBACKREST_HOST:-pgbackrest}"
 
 # ── SSH private key (injected by OwnBase secrets as env var) ─────────────────
-if [ -z "${PGBACKREST_SSH_KEY:-}" ]; then
-    log "WARNING: PGBACKREST_SSH_KEY is not set — WAL archiving to pgbackrest will fail."
-    log "         Set it with: ownbasectl secrets set postgres PGBACKREST_SSH_KEY=..."
+# Accept the key either as plain text (PGBACKREST_SSH_KEY) or base64-encoded
+# (PGBACKREST_SSH_KEY_B64). Base64 is preferred because YAML env values cannot
+# contain literal newlines, and ownbase.yaml env: items are single-line strings.
+if [ -n "${PGBACKREST_SSH_KEY_B64:-}" ]; then
+    _RAW_KEY=$(printf '%s' "$PGBACKREST_SSH_KEY_B64" | base64 -d)
+elif [ -n "${PGBACKREST_SSH_KEY:-}" ]; then
+    _RAW_KEY="$PGBACKREST_SSH_KEY"
+else
+    _RAW_KEY=""
+fi
+
+if [ -z "${_RAW_KEY:-}" ]; then
+    log "WARNING: PGBACKREST_SSH_KEY_B64 (or PGBACKREST_SSH_KEY) is not set — WAL archiving to pgbackrest will fail."
+    log "         Set it with: ownbasectl secrets set postgres PGBACKREST_SSH_KEY_B64=\$(base64 -w0 < ~/.ssh/pgbackrest_key)"
 else
     SSH_DIR=/var/lib/postgresql/.ssh
     mkdir -p "$SSH_DIR"
-    printf '%s\n' "$PGBACKREST_SSH_KEY" > "$SSH_DIR/id_ed25519"
+    printf '%s\n' "$_RAW_KEY" > "$SSH_DIR/id_ed25519"
     chmod 600 "$SSH_DIR/id_ed25519"
     # Disable strict host checking for the pgbackrest container; communication
     # is internal to the Podman network and the channel is authenticated by key.
