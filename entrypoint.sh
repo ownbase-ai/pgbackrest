@@ -21,6 +21,9 @@ PermitRootLogin no
 AllowUsers pgbackrest
 PasswordAuthentication no
 PubkeyAuthentication yes
+# Disable privilege separation: the container provides its own isolation
+# and CAP_SYS_CHROOT is not available with DropCapability=ALL + SETUID/SETGID.
+UsePrivilegeSeparation no
 EOF
 
 # ── Authorized key (injected by OwnBase secrets as env var) ─────────────────
