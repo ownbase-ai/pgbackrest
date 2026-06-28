@@ -1,0 +1,5 @@
+# Generated SSH keys (never commit these)
+pgbackrest-key
+pgbackrest-key.pub
+*.pem
+*.key
