@@ -20,11 +20,9 @@ if [ -z "${PGBACKREST_CLIENT_PUBKEY:-}" ]; then
     log "WARNING: PGBACKREST_CLIENT_PUBKEY is not set — the postgres container cannot connect via SSH."
     log "         Set it with: ownbasectl secrets set pgbackrest PGBACKREST_CLIENT_PUBKEY=..."
 else
+    # .ssh/ and authorized_keys are root-owned (Dockerfile), so root in the
+    # container can write here even with CAP_DAC_OVERRIDE dropped.
     printf '%s\n' "$PGBACKREST_CLIENT_PUBKEY" > /home/pgbackrest/.ssh/authorized_keys
-    chmod 600 /home/pgbackrest/.ssh/authorized_keys
-    # CAP_CHOWN is dropped by OwnBase; file is already owned by pgbackrest from
-    # the Dockerfile RUN step so we only need the content right.
-    chown pgbackrest:pgbackrest /home/pgbackrest/.ssh/authorized_keys 2>/dev/null || true
     log "SSH authorized key installed."
 fi
 

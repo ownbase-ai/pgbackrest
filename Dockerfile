@@ -16,11 +16,15 @@ RUN useradd -m -s /bin/bash pgbackrest && \
         /etc/pgbackrest \
         /home/pgbackrest/.ssh \
         /run/sshd && \
-    chmod 700 /home/pgbackrest/.ssh && \
     chown -R pgbackrest:pgbackrest \
         /var/lib/pgbackrest \
-        /var/log/pgbackrest \
-        /home/pgbackrest/.ssh
+        /var/log/pgbackrest && \
+    # Keep .ssh owned by root so the entrypoint (root, CAP_DAC_OVERRIDE dropped)
+    # can write authorized_keys. sshd accepts root-owned authorized_keys files
+    # provided they are not group/world-writable (modes below satisfy that).
+    chmod 755 /home/pgbackrest/.ssh && \
+    touch /home/pgbackrest/.ssh/authorized_keys && \
+    chmod 644 /home/pgbackrest/.ssh/authorized_keys
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
